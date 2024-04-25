@@ -1,2 +1,1 @@
-# CEMDL
-Comprehensive Advancements for Modern Deep Learning
+# CEMDL: Comprehensive Advancements for Modern Deep Learning
