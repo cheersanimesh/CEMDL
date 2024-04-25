@@ -22,7 +22,6 @@ __global__ void mat_mul_kernel(OpFunc f, const Tensor<T> A, const Tensor<T> B, T
         int j = blockIdx.x * blockDim.x + threadIdx.x;
 
        if(!IndexOutofBound(C,i,j)){
-            //printf("hello bey\n");
             T val=(T)0.0;
             for(int k=0;k<A.w;k++)
             {
@@ -36,7 +35,6 @@ void op_mm(const Tensor<T>& A, const Tensor<T>& B, Tensor<T>& C)
 {
     assert(A.h == C.h && B.w == C.w && A.w == B.h);
     assert(A.on_device && B.on_device && C.on_device);
-    //printf("kaisa hai\n");
     //Lab-1: please complete this
     //You need to define separate kernel function(s) and launch them here
     //delete assert(0) when you are finished
