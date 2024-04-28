@@ -62,7 +62,7 @@ public:
   }
 
   Tensor3D(int32_t h_, int32_t w_, int32_t d_, bool on_device_ = false)
-      : h(h_), w(w_),d(d_), stride_h(w_), stride_w(1), stride_d(1), offset(0), on_device(on_device_)
+      : h(h_), w(w_),d(d_), stride_h(w_), stride_w(1), stride_d(h_*w_), offset(0), on_device(on_device_)
   {
     if (on_device_)
     {
