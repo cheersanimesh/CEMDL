@@ -1,12 +1,47 @@
 #include <getopt.h>
-
+#include "layers/flattenLayer.cuh"
 #include "utils/tensor.cuh"
 #include "ops/op_mm.cuh"
 #include "ops/op_elemwise.cuh"
 #include "ops/op_reduction.cuh"
 #include "ops/op_cross_entropy.cuh"
+#include "utils/tensor3D.cuh"
 
 unsigned long long randgen_seed = 0;
+
+void test_flatten(int batch_size, int height, int width, bool on_gpu) {
+    // Create a 3D tensor to represent a batch of 2D images
+    Tensor3D<float> x(height, width, batch_size, on_gpu);
+
+    // Calculate the expected width of the flattened tensor
+    int expected_w = height * width;
+    Tensor<float> expected(batch_size, expected_w);
+
+    // Manually flattening the tensor using 3D indexing
+    for (int b = 0; b < batch_size; b++) {
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                int index = i * width + j;
+                Index(expected, b, index) = Index3D(x, i, j, b);
+            }
+        }
+    }
+
+    // Assuming FlattenLayer is correctly defined and included
+    FlattenLayer<float> flatten;
+    Tensor<float> y;
+    flatten.forward(x, y); // Flatten the tensor using the FlattenLayer
+
+    // Check if the output tensor y is equal to the expected tensor
+    for (int b = 0; b < batch_size; b++) {
+        for (int i = 0; i < expected_w; i++) {
+            assert(Index(y, b, i) == Index(expected, b, i)); // Compare using the Index macro
+        }
+    }
+
+    std::cout << "Flatten test passed..." << std::endl;
+}
+
 
 void test_matmul(int m, int n, int k, bool on_gpu)
 {
@@ -271,11 +306,14 @@ int main(int argc, char *argv[])
         }
         break;
     }
+
     test_views();
     test_elemwise(test_m, test_n, test_gpu);
     test_matmul(test_m, test_n, test_k, test_gpu);
     test_reduction(test_m, test_n, test_gpu);
     test_op_cross_entropy_loss(test_gpu);
+    test_flatten(test_m, test_n, test_k, test_gpu); // Assuming test_k is width for simplicity
     std::cout << "All tests completed successfully!" << std::endl;
     return 0;
 }
+
