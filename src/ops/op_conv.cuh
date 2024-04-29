@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/tensor.cuh"
+#include "utils/tensor3D.cuh"
 
 //This operator compute C = A@B
 template <typename T>
@@ -15,45 +16,84 @@ class MultiplyFunc
 };
 
 template <typename OpFunc, typename T>
-__global__ void conv_kernel(const Tensor3D<T> input, Tensor3D<T> weights, Tensor<T> output, int stride, int padding)
+__global__ conv_kernel_naive(OpFunc f,const Tensor3D<T> input, Tensor3D<T> weights, Tensor<T> output, 
+                                int stride, int padding)
 {
-        int out_x = blockIdx.x * blockDim.x + threadIdx.x;
-        int out_y = blockIdx.y * blockDim.y + threadIdx.y;
-        int channel = blockIdx.z * blockDim.z + threadIdx.z;
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    int32_t num_channels = input.d;
 
-        int kernel_radius_x = kernel_width / 2;
-        int kernel_radius_y = kernel_height / 2;
-
-        if (channel >= channels) return;
-
-        float value = 0.0;
-
-        int in_x_origin = (out_x * stride) - padding;
-        int in_y_origin = (out_y * stride) - padding;
-
-        // if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
-        //     out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
-        //     return;
-
-        if(!IndexOutofBound(out_x, out_y)){
-
-            for (int i = 0; i < kernel_width; i++) {
-                for (int j = 0; j < kernel_height; j++) {
-                    int in_x = in_x_origin + i;
-                    int in_y = in_y_origin + j;
-
-                    if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
-                        int input_index = (in_y * width + in_x) * channels + channel;
-                        int kernel_index = (j * kernel_width + i) * channels + channel;
-                        value += input[input_index] * kernel[kernel_index];
+    if(!IndexOutofBound(output, row, col))
+    {
+        T val = 0.0;
+        int start_inp_c = stride * col; 
+        int start_inp_r = stride * row;
+        int end_inp_c = start_inp_c + stride.w;
+        int end_inp_r = start_inp_r + stride.h;  
+        if( end_inp_c < input.w && end_inp_r < input.h)
+        {
+            for(int i=start_inp_r;i<=end_inp_r;i++)
+            {
+                for(int j=start_inp_c;j<=end_inp_c;j++)
+                {
+                    for(int chan = 0;chan < num_channels ; chan++)
+                    {
+                        val += f(
+                            Index(input.values[chan], i, j),
+                            Index(weights.values[chan], i, j)
+                        );
                     }
                 }
             }
-
-            int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
-            output[output_index] = value;
         }
+
+        Index(output, row, col) = val;
+    }
+
 }
+// template <typename OpFunc, typename T>
+// __global__ void conv_kernel(const Tensor3D<T> input, Tensor3D<T> weights, Tensor<T> output, 
+//                                 int stride, int padding)
+// {
+//         int out_x = blockIdx.x * blockDim.x + threadIdx.x;
+//         int out_y = blockIdx.y * blockDim.y + threadIdx.y;
+//         int channel = blockIdx.z * blockDim.z + threadIdx.z;
+
+//         int kernel_radius_x = kernel_width / 2;
+//         int kernel_radius_y = kernel_height / 2;
+//         int channels = input.d;
+        
+
+//         if (channel >= channels) return;
+
+//         float value = 0.0;
+
+//         int in_x_origin = (out_x * stride) - padding;
+//         int in_y_origin = (out_y * stride) - padding;
+
+//         // if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
+//         //     out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
+//         //     return;
+
+//         if(!IndexOutofBound(output, out_x, out_y)){
+
+//             for (int i = 0; i < kernel_width; i++) {
+//                 for (int j = 0; j < kernel_height; j++) {
+//                     int in_x = in_x_origin + i;
+//                     int in_y = in_y_origin + j;
+
+//                     if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
+//                         int input_index = (in_y * width + in_x) * channels + channel;
+//                         int kernel_index = (j * kernel_width + i) * channels + channel;
+//                         value += input[input_index] * kernel[kernel_index];
+//                     }
+//                 }
+//             }
+
+//             int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
+//             output[output_index] = value;
+//         }
+// }
 template <typename T>
 void op_conv(const Tensor3D<T>& input, const Tensor3D<T>& weights, Tensor<T>& output, int stride, int padding)
 {
@@ -69,57 +109,59 @@ void op_conv(const Tensor3D<T>& input, const Tensor3D<T>& weights, Tensor<T>& ou
     //delete assert(0) when you are finished
     int32_t N1 = A.h, M2 = B.w;
     
-    dim3 threadsPerBlock(16,16,1);
+    dim3 threadsPerBlock(16,16);
 
     MultiplyFunc<T> f;
     dim3 numBlocks( 
         (val2+ threadsPerBlock.x-1)/threadsPerBlock.x, 
         (val1+threadsPerBlock.y-1)/threadsPerBlock.y,
-        input.d
     );
 
-    conv_kernel<<numBlocks , threadsPerBlock>>>(input, weights, output, stride, padding)
+    MultiplyFunc f;
+
+    conv_kernel_naive<<numBlocks, threadsPerBlock>>>(input, weights, output, stride, padding);
+    //conv_kernel<<numBlocks , threadsPerBlock>>>(input, weights, output, stride, padding)
     //mat_mul_kernel<<<numBlocks, threadsPerBlock>>>(f, A, B, C); 
     //mat_mul_kernel<<<numBlocks, threadsPerBlock>>>(f, A, B, C); 
     //assert(0);
 }
 
 
-__global__ void conv2d_multichannel_kernel(float *input, float *output, float *kernel,
-                                           int width, int height, int channels,
-                                           int kernel_width, int kernel_height,
-                                           int pad_x, int pad_y, int stride_x, int stride_y) {
-    int out_x = blockIdx.x * blockDim.x + threadIdx.x;
-    int out_y = blockIdx.y * blockDim.y + threadIdx.y;
-    int channel = blockIdx.z * blockDim.z + threadIdx.z;
+// __global__ void conv2d_multichannel_kernel(float *input, float *output, float *kernel,
+//                                            int width, int height, int channels,
+//                                            int kernel_width, int kernel_height,
+//                                            int pad_x, int pad_y, int stride_x, int stride_y) {
+//     int out_x = blockIdx.x * blockDim.x + threadIdx.x;
+//     int out_y = blockIdx.y * blockDim.y + threadIdx.y;
+//     int channel = blockIdx.z * blockDim.z + threadIdx.z;
 
-    int kernel_radius_x = kernel_width / 2;
-    int kernel_radius_y = kernel_height / 2;
+//     int kernel_radius_x = kernel_width / 2;
+//     int kernel_radius_y = kernel_height / 2;
 
-    if (channel >= channels) return;
+//     if (channel >= channels) return;
 
-    float value = 0.0;
-    // Map the output position to the input position, considering stride and padding
-    int in_x_origin = (out_x * stride_x) - pad_x;
-    int in_y_origin = (out_y * stride_y) - pad_y;
+//     float value = 0.0;
+//     // Map the output position to the input position, considering stride and padding
+//     int in_x_origin = (out_x * stride_x) - pad_x;
+//     int in_y_origin = (out_y * stride_y) - pad_y;
 
-    if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
-        out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
-        return;
+//     if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
+//         out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
+//         return;
 
-    for (int i = 0; i < kernel_width; i++) {
-        for (int j = 0; j < kernel_height; j++) {
-            int in_x = in_x_origin + i;
-            int in_y = in_y_origin + j;
+//     for (int i = 0; i < kernel_width; i++) {
+//         for (int j = 0; j < kernel_height; j++) {
+//             int in_x = in_x_origin + i;
+//             int in_y = in_y_origin + j;
 
-            if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
-                int input_index = (in_y * width + in_x) * channels + channel;
-                int kernel_index = (j * kernel_width + i) * channels + channel;
-                value += input[input_index] * kernel[kernel_index];
-            }
-        }
-    }
+//             if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
+//                 int input_index = (in_y * width + in_x) * channels + channel;
+//                 int kernel_index = (j * kernel_width + i) * channels + channel;
+//                 value += input[input_index] * kernel[kernel_index];
+//             }
+//         }
+//     }
 
-    int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
-    output[output_index] = value;
-}
+//     int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
+//     output[output_index] = value;
+// }

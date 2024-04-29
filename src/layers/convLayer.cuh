@@ -44,7 +44,7 @@ class ConvLayer {
     void init_uniform() {
 
         // Do Kaiming uniform
-        float max = 1.0f / std::sqrt(in_dim);
+        float max = 1.0f / std::sqrt(in_height+in_width+in_depth);
 
         for(int i=0;i<num_filters;i++){
           //changed implementation for 3d
