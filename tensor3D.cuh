@@ -6,13 +6,12 @@
 #include <string>
 
 #include "utils/assert.cuh"
-#include "utils/tensor.cuh"
 
 #define ISCLOSE_RELTOL 1e-6 // this would not work for precision lower than float
 #define ISCLOSE_ABSTOL 1e-6
 
 //Index is a MACRO that returns the element of t tensor at row, col coordinate
-//#define Index3D(t, row, col, chan) ((((t).rawp) [(t).offset + (chan) * (t).stride_d + (row) * (t).stride_h + (col) * (t).stride_w]))
+#define Index3D(t, row, col, chan) ((((t).rawp) [(t).offset + (chan) * (t).stride_d + (row) * (t).stride_h + (col) * (t).stride_w]))
 //IndexOutofBound is a MACRO to test whether coordinate row,col is considered out of bounds for tensor "t"
 #define IndexOutofBound(t, row, col, chan) ((((row) >= (t).h) || ((col) >= (t).w) || ((chan) >= (t).d)))
 
@@ -54,8 +53,7 @@ public:
   int32_t stride_d;
   int32_t offset;
 
-  vector<Tensor<T>> values;
-  
+  T *rawp;
   std::shared_ptr<T> ref; // refcounted pointer, for garbage collection use only
   bool on_device;
 
@@ -69,17 +67,15 @@ public:
   {
     if (on_device_)
     {
-      for(int i=0;i<d;i++){
-        Tensor<T> temp{h, w, on_device};
-        values.push_back(temp);
-      }
+      cudaAssert(cudaMalloc(&rawp, sizeof(T) * h * w * d));
+      // std::cout << "cudaMalloc p=" << rawp << std::endl;
+      ref = std::shared_ptr<T>(rawp, cudaDeleter<T>());
     }
     else
     {
-      for(int i=0;i<d;i++){
-        Tensor<T> temp{h, w, false};
-        values.push_back(temp);
-      }
+      rawp = (T *)malloc(sizeof(T) * h * w * d);
+      //std::cout << "malloc p=" << rawp << " h=" << h << " w=" << w << std::endl;
+      ref = std::shared_ptr<T>(rawp, cpuDeleter<T>());
     }
   }
 
@@ -95,10 +91,7 @@ public:
     out.stride_h = stride_h;
     out.stride_w = stride_w;
     out.stride_d = stride_d;
-
-    for(int i=0;i<d;i++){
-      cudaAssert(cudaMemcpy(out.values[i].rawp, values[i].rawp, h * w * sizeof(T), cudaMemcpyDeviceToHost));
-    }
+    cudaAssert(cudaMemcpy(out.rawp, rawp, h * w * d * sizeof(T), cudaMemcpyDeviceToHost));
   }
 
   Tensor3D<T> toHost() const
@@ -120,7 +113,7 @@ public:
     out.stride_h = stride_h;
     out.stride_w = stride_w;
     out.stride_d = stride_d;
-    cudaAssert(cudaMemcpy(out.values[i].rawp, values[i].rawp, h * w * d * sizeof(T), cudaMemcpyHostToDevice));
+    cudaAssert(cudaMemcpy(out.rawp, rawp, h * w * d * sizeof(T), cudaMemcpyHostToDevice));
   }
 
   Tensor3D<T> toDevice() const
@@ -226,3 +219,5 @@ public:
   //   return max-min;
   // }
 };
+
+
