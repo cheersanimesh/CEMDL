@@ -4,6 +4,7 @@
 #include <memory>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "utils/assert.cuh"
 #include "utils/tensor.cuh"
@@ -13,34 +14,10 @@
 
 //Index is a MACRO that returns the element of t tensor at row, col coordinate
 //#define Index3D(t, row, col, chan) ((((t).rawp) [(t).offset + (chan) * (t).stride_d + (row) * (t).stride_h + (col) * (t).stride_w]))
+#define Index3D(t, row, col, depth) (((t).values[(depth)].rawp)[(t).values[(depth)].offset + (row) * (t).values[(depth)].stride_h + (col) * (t).values[(depth)].stride_w])
 //IndexOutofBound is a MACRO to test whether coordinate row,col is considered out of bounds for tensor "t"
 #define IndexOutofBound(t, row, col, chan) ((((row) >= (t).h) || ((col) >= (t).w) || ((chan) >= (t).d)))
 
-template <typename T>
-struct cudaDeleter
-{
-  void operator()(T *p) const
-  {
-    if (p != nullptr)
-    {
-      // std::cout << "Free p=" << p << std::endl;
-      cudaFree(p);
-    }
-  }
-};
-
-template <typename T>
-struct cpuDeleter
-{
-  void operator()(T *p) const
-  {
-    if (p != nullptr)
-    {
-      // std::cout << "Free p=" << p << std::endl;
-      free(p);
-    }
-  }
-};
 
 template <typename T>
 class Tensor3D
@@ -53,8 +30,9 @@ public:
   int32_t stride_w;
   int32_t stride_d;
   int32_t offset;
+  T *rawp;
 
-  vector<Tensor<T>> values;
+  std::vector<Tensor<T>> values;
   
   std::shared_ptr<T> ref; // refcounted pointer, for garbage collection use only
   bool on_device;
@@ -120,7 +98,10 @@ public:
     out.stride_h = stride_h;
     out.stride_w = stride_w;
     out.stride_d = stride_d;
-    cudaAssert(cudaMemcpy(out.values[i].rawp, values[i].rawp, h * w * d * sizeof(T), cudaMemcpyHostToDevice));
+
+    for(int i=0;i<d;i++){
+      cudaAssert(cudaMemcpy(out.values[i].rawp, values[i].rawp, h * w * d * sizeof(T), cudaMemcpyHostToDevice));
+    }
   }
 
   Tensor3D<T> toDevice() const
