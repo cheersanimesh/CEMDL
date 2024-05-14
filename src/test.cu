@@ -303,7 +303,7 @@ void test_pooling() {
     for (int i = 0; i < output.d; i++) {
         for (int j = 0; j < output.h; j++) {
             for (int k = 0; k < output.w; k++) {
-                if (!isClose(output.rawp[idx], i * 0 + j * 6 + k * 2 + 3)) {
+                if (!isClose(output.rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
                     maxPoolCorrect = false;
                     break;
                 }
