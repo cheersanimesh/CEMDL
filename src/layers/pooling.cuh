@@ -38,8 +38,7 @@ Tensor3D<T> max_pool2d_backward(const Tensor3D<T>& grad_output, const Tensor3D<T
     Tensor3D<T> grad_input(input.d, input.h, input.w, input.on_device);
 
     if (input.on_device) {
-        // Implement max pooling backward on GPU
-        // ...
+        // TODO: Implement max pooling backward on GPU
     } else {
         for (int i = 0; i < grad_input.d; i++) {
             for (int j = 0; j < grad_input.h; j++) {
