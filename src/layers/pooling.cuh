@@ -10,8 +10,7 @@ Tensor3D<T> max_pool2d_forward(const Tensor3D<T>& input, int kernel_size) {
     Tensor3D<T> output(output_d, output_h, output_w, input.on_device);
 
     if (input.on_device) {
-        // Implement max pooling on GPU
-        // ...
+        // TODO: Implement max pooling on GPU
     } else {
         for (int i = 0; i < output_d; i++) {
             for (int j = 0; j < output_h; j++) {
