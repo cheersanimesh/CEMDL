@@ -6,8 +6,68 @@
 #include "ops/op_reduction.cuh"
 #include "ops/op_cross_entropy.cuh"
 #include "utils/tensor3D.cuh"
+#include "layers/pooling.cuh"
+#include <iostream>
 
 unsigned long long randgen_seed = 0;
+
+template <typename T>
+bool isClose(T a, T b, T reltol = ISCLOSE_RELTOL, T abstol = ISCLOSE_ABSTOL) {
+    return std::abs(a - b) <= std::max(reltol * std::max(std::abs(a), std::abs(b)), abstol);
+}
+
+void test_pooling() {
+    Tensor3D<float> input(1, 4, 4, false);
+    int idx = 0;
+    for (int i = 0; i < input.d; i++) {
+        for (int j = 0; j < input.h; j++) {
+            for (int k = 0; k < input.w; k++) {
+                input.rawp[idx++] = i * 16 + j * 4 + k;
+            }
+        }
+    }
+
+    int kernel_size = 2;
+    Tensor3D<float> output = max_pool2d_forward(input, kernel_size);
+    Tensor3D<float> grad_input = max_pool2d_backward(output, input, kernel_size);
+
+    bool maxPoolCorrect = true;
+    idx = 0;
+    for (int i = 0; i < output.d; i++) {
+        for (int j = 0; j < output.h; j++) {
+            for (int k = 0; k < output.w; k++) {
+                if (!isClose(output.rawp[idx], i * 0 + j * 6 + k * 2 + 3)) {
+                    maxPoolCorrect = false;
+                    break;
+                }
+                idx++;
+            }
+        }
+    }
+
+    bool gradInputCorrect = true;
+    idx = 0;
+    for (int i = 0; i < grad_input.d; i++) {
+        for (int j = 0; j < grad_input.h; j++) {
+            for (int k = 0; k < grad_input.w; k++) {
+                if ((j == 1 && k == 1) || (j == 1 && k == 2) || (j == 2 && k == 1) || (j == 2 && k == 2)) {
+                    if (!isClose(grad_input.rawp[idx++], 1.0f)) {
+                        gradInputCorrect = false;
+                        break;
+                    }
+                } else {
+                    if (!isClose(grad_input.rawp[idx++], 0.0f)) {
+                        gradInputCorrect = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cout << "Max Pooling Forward Test: " << (maxPoolCorrect ? "Passed" : "Failed") << std::endl;
+    std::cout << "Max Pooling Backward Test: " << (gradInputCorrect ? "Passed" : "Failed") << std::endl;
+}
 
 void test_flatten(int batch_size, int height, int width, bool on_gpu) {
     // Create a 3D tensor to represent a batch of 2D images
