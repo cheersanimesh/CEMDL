@@ -267,7 +267,7 @@ void test_flatten(int batch_size, int height, int width, bool on_gpu) {
         }
     }
 
-    std::cout << "Flatten test passed..." << std::endl;
+    std::cout << "flatten test passed..." << std::endl;
 }
 
 void test_pooling() {
@@ -314,8 +314,8 @@ void test_pooling() {
         }
     }
 
-    std::cout << "Max Pooling Forward Test: " << (maxPoolCorrect ? "Passed" : "Failed") << std::endl;
-    std::cout << "Max Pooling Backward Test: " << (gradInputCorrect ? "Passed" : "Failed") << std::endl;
+    std::cout << "max pooling forward test: " << (maxPoolCorrect ? "passed..." : "failed!") << std::endl;
+    std::cout << "max pooling backward test: " << (gradInputCorrect ? "passed..." : "failed!") << std::endl;
 }
 
 int main(int argc, char *argv[])
