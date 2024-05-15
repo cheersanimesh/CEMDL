@@ -1,1 +1,1 @@
-# CEMDL: Comprehensive Advancements for Modern Deep Learning
+# Improvements on Barenet: Auto-differentiation, ResNet and Transformer

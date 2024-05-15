@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/tensor.cuh"
+#include "utils/tensor3D.cuh"
 
 // Template class for a FlattenLayer.
 // This layer converts a multi-dimensional tensor into a 2D tensor,
@@ -10,9 +10,9 @@ class FlattenLayer {
 public:
     // Forward pass of the flatten layer.
     // It reshapes the input tensor `x` from a 3D tensor (batch_size, width, channels) into a 2D tensor (batch_size, width*channels).
-    void forward(const Tensor<T>& x, Tensor<T>& y) {
+    void forward(const Tensor3D<T>& x, Tensor<T>& y) {
         int batch_size = x.h;  // Batch size is assumed to be the height of the tensor
-        int input_size = x.w * x.c;  // Total number of elements per batch element after flattening
+        int input_size = x.w * x.h;  // Total number of elements per batch element after flattening
         y.resize(batch_size, input_size);  // Resize output tensor to hold the flattened data
 
         // Iterate over each element in the batch

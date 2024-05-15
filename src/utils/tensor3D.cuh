@@ -16,7 +16,7 @@
 //#define Index3D(t, row, col, chan) ((((t).rawp) [(t).offset + (chan) * (t).stride_d + (row) * (t).stride_h + (col) * (t).stride_w]))
 #define Index3D(t, row, col, depth) (((t).values[(depth)].rawp)[(t).values[(depth)].offset + (row) * (t).values[(depth)].stride_h + (col) * (t).values[(depth)].stride_w])
 //IndexOutofBound is a MACRO to test whether coordinate row,col is considered out of bounds for tensor "t"
-#define IndexOutofBound(t, row, col, chan) ((((row) >= (t).h) || ((col) >= (t).w) || ((chan) >= (t).d)))
+//#define IndexOutofBound(t, row, col, chan) ((((row) >= (t).h) || ((col) >= (t).w) || ((chan) >= (t).d)))
 
 
 template <typename T>
