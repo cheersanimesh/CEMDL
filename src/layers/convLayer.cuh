@@ -3,10 +3,14 @@
 #include "ops/op_reduction.cuh"
 #include "ops/op_mm.cuh"
 #include "modules/convParams.cuh"
+#include "ops/op_padding.cuh"
 
 template<typename T>
 class ConvLayer {
-    private:
+
+    public:
+
+    string layerid;
 
 		int in_height;
 		int in_width;
@@ -24,9 +28,7 @@ class ConvLayer {
 
 		ConvParameter<T> params;
 	
-
-    public:
-    ConvLayer(int in_height_, int in_width_, int in_depth_, int out_height_, int out_width_, int w_height_, int w_width_, int num_filters_, bool gpu,int stride_=1, int padding_=0):in_height(in_dim_), in_width(in_width_), in_depth(in_depth_), out_height(out_height_), w_weight(w_height_), num_filters(num_filters_), stride(stride_), padding(padding_){
+    ConvLayer(string layer_id_, int in_height_, int in_width_, int in_depth_, int out_height_, int out_width_, int w_height_, int w_width_, int num_filters_, bool gpu,int stride_=1, int padding_=0): layer_id(layer_id_),in_height(in_dim_), in_width(in_width_), in_depth(in_depth_), out_height(out_height_), w_weight(w_height_), num_filters(num_filters_), stride(stride_), padding(padding_){
 		  params = ConvParameter<T>{w_height, w_width, in_depth, num_filters, gpu};
     }
 
@@ -64,11 +66,12 @@ class ConvLayer {
        assert(in.d== weights[0].d && num_filters == out.d);
 
        Tensor3D<float> in_device = in.toDevice();
-
+       Tensor3D<float> padded_tensor = Tensor3D<float>{in.h+2*padding, in.w + 2*padding, in.d, true};
+       op_padding(in, padded_tensor, padding);
        for(int i=0;i<num_filters;i++)
        {
           Tensor3D<float> w_t_device =  params.weights[i].toDevice();
-          op_conv( in, w_t_device, out.values[i], stride, padding);
+          op_conv( padded_tensor, w_t_device, out.values[i], stride, padding);
           op_relu(out.values[i], out.values[i]);
        }
               
