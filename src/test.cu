@@ -1,5 +1,6 @@
 #include <getopt.h>
 #include <iostream>
+#include "layers/conv.cuh"
 #include "layers/flatten.cuh"
 #include "layers/pooling.cuh"
 #include "ops/op_mm.cuh"
@@ -324,6 +325,89 @@ void test_pooling() {
 
     std::cout << "max pooling forward test: " << (maxPoolCorrect ? "passed..." : "failed!") << std::endl;
     std::cout << "max pooling backward test: " << (gradInputCorrect ? "passed..." : "failed!") << std::endl;
+}
+
+#define Index4D(t, b, c, h, w) ((t).rawp[(b) * (t).w * (t).d1 * (t).d2 + (c) * (t).d1 * (t).d2 + (h) * (t).d2 + (w)])
+
+template <typename T>
+bool test_conv_layer() {
+    int batch_size = 2;
+    int in_channels = 3;
+    int in_height = 5;
+    int in_width = 5;
+    int out_channels = 2;
+    int kernel_size = 3;
+    int stride = 1;
+    int padding = 1;
+
+    Tensor<T> x{batch_size, in_channels, in_height, in_width, true};
+    op_uniform_init(x);
+
+    ConvLayer<T> conv(in_channels, out_channels, kernel_size, stride, padding, true);
+    conv.init_uniform();
+
+    Tensor<T> y, dx, dw, db;
+    conv.forward(x, y);
+
+    Tensor<T> dy{batch_size, out_channels, y.d1, y.d2, true};
+    op_uniform_init(dy);
+
+    conv.backward(x, dy, dx, dw, db);
+
+    bool forward_passed = true;
+    bool backward_passed = true;
+
+    for (int b = 0; b < batch_size; ++b) {
+        for (int oc = 0; oc < out_channels; ++oc) {
+            for (int oh = 0; oh < y.d1; ++oh) {
+                for (int ow = 0; ow < y.d2; ++ow) {
+                    T expected_y = /* compute expected y value using a reference implementation */;
+                    if (!isClose(Index4D(y, b, oc, oh, ow), expected_y)) {
+                        forward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (int b = 0; b < batch_size; ++b) {
+        for (int ic = 0; ic < in_channels; ++ic) {
+            for (int ih = 0; ih < in_height; ++ih) {
+                for (int iw = 0; iw < in_width; ++iw) {
+                    T expected_dx = /* compute expected dx value using a reference implementation */;
+                    if (!isClose(Index4D(dx, b, ic, ih, iw), expected_dx)) {
+                        backward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (int oc = 0; oc < out_channels; ++oc) {
+        for (int ic = 0; ic < in_channels; ++ic) {
+            for (int kh = 0; kh < kernel_size; ++kh) {
+                for (int kw = 0; kw < kernel_size; ++kw) {
+                    T expected_dw = /* compute expected dw value using a reference implementation */;
+                    if (!isClose(Index4D(dw, oc, ic, kh, kw), expected_dw)) {
+                        backward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    for (int oc = 0; oc < out_channels; ++oc) {
+        T expected_db = /* compute expected db value using a reference implementation */;
+        if (!isClose(Index4D(db, 0, oc, 0, 0), expected_db)) {
+            backward_passed = false;
+            break;
+        }
+    }
+
+    return forward_passed && backward_passed;
 }
 
 int main(int argc, char *argv[])
