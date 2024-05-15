@@ -1,6 +1,6 @@
 #include <getopt.h>
 #include <iostream>
-#include "layers/flattenLayer.cuh"
+#include "layers/flatten.cuh"
 #include "layers/pooling.cuh"
 #include "ops/op_mm.cuh"
 #include "ops/op_elemwise.cuh"
