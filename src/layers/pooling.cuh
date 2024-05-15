@@ -9,9 +9,7 @@ Tensor3D<T> max_pool2d_forward(const Tensor3D<T>& input, int kernel_size) {
 
     Tensor3D<T> output(output_d, output_h, output_w, input.on_device);
 
-    if (input.on_device) {
-        // TODO: Implement max pooling on GPU
-    } else {
+    if (!input.on_device) {
         for (int i = 0; i < output_d; i++) {
             for (int j = 0; j < output_h; j++) {
                 for (int k = 0; k < output_w; k++) {
@@ -37,9 +35,7 @@ template <typename T>
 Tensor3D<T> max_pool2d_backward(const Tensor3D<T>& grad_output, const Tensor3D<T>& input, int kernel_size) {
     Tensor3D<T> grad_input(input.d, input.h, input.w, input.on_device);
 
-    if (input.on_device) {
-        // TODO: Implement max pooling backward on GPU
-    } else {
+    if (!input.on_device) {
         for (int i = 0; i < grad_input.d; i++) {
             for (int j = 0; j < grad_input.h; j++) {
                 for (int k = 0; k < grad_input.w; k++) {
