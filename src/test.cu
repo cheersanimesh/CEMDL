@@ -293,13 +293,13 @@ void test_pooling() {
     Tensor3D<float> output = max_pool2d_forward(input, kernel_size);
     Tensor3D<float> grad_input = max_pool2d_backward(output, input, kernel_size);
 
-    bool maxPoolCorrect = true;
+    bool maxPoolCorrect = false;
     idx = 0;
     for (int i = 0; i < output.d; i++) {
         for (int j = 0; j < output.h; j++) {
             for (int k = 0; k < output.w; k++) {
-                if (is_close_enough(output.values[i].rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
-                    maxPoolCorrect = false;
+                if (!is_close_enough(output.values[i].rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
+                    maxPoolCorrect = true;
                     break;
                 }
                 idx++;
@@ -307,14 +307,14 @@ void test_pooling() {
         }
     }
 
-    bool gradInputCorrect = true;
+    bool gradInputCorrect = false;
     idx = 0;
     for (int i = 0; i < grad_input.d; i++) {
         for (int j = 0; j < grad_input.h; j++) {
             for (int k = 0; k < grad_input.w; k++) {
                 if ((j == 1 && k == 1) || (j == 1 && k == 2) || (j == 2 && k == 1) || (j == 2 && k == 2)) {
-                    if (is_close_enough(grad_input.values[i].rawp[idx++], 1.0f)) {
-                        gradInputCorrect = false;
+                    if (!is_close_enough(grad_input.values[i].rawp[idx++], 1.0f)) {
+                        gradInputCorrect = true;
                         break;
                     }
                 }
