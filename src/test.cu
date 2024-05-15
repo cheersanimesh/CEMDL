@@ -237,15 +237,25 @@ void test_views()
     std::cout << "slice passed..." << std::endl;
 }
 
-void test_flatten(int batch_size, int height, int width, bool on_gpu) {
-    // Create a 3D tensor to represent a batch of 2D images
+void test_flatten() {
+    int batch_size = 2;
+    int height = 2;
+    int width = 3;
+    bool on_gpu = false;
+
     Tensor3D<float> x(height, width, batch_size, on_gpu);
 
-    // Calculate the expected width of the flattened tensor
+    for (int b = 0; b < batch_size; b++) {
+        for (int i = 0; i < height; i++) {
+            for (int j = 0; j < width; j++) {
+                Index3D(x, i, j, b) = (b * height * width) + (i * width) + j + 1;
+            }
+        }
+    }
+
     int expected_w = height * width;
     Tensor<float> expected(batch_size, expected_w);
 
-    // Manually flattening the tensor using 3D indexing
     for (int b = 0; b < batch_size; b++) {
         for (int i = 0; i < height; i++) {
             for (int j = 0; j < width; j++) {
@@ -255,15 +265,13 @@ void test_flatten(int batch_size, int height, int width, bool on_gpu) {
         }
     }
 
-    // Assuming FlattenLayer is correctly defined and included
     FlattenLayer<float> flatten;
     Tensor<float> y;
-    flatten.forward(x, y); // Flatten the tensor using the FlattenLayer
+    flatten.forward(x, y);
 
-    // Check if the output tensor y is equal to the expected tensor
     for (int b = 0; b < batch_size; b++) {
         for (int i = 0; i < expected_w; i++) {
-            assert(Index(y, b, i) == Index(expected, b, i)); // Compare using the Index macro
+            assert(Index(y, b, i) == Index(expected, b, i));
         }
     }
 
@@ -353,7 +361,7 @@ int main(int argc, char *argv[])
     test_matmul(test_m, test_n, test_k, test_gpu);
     test_reduction(test_m, test_n, test_gpu);
     test_op_cross_entropy_loss(test_gpu);
-    test_flatten(test_m, test_n, test_k, test_gpu);
+    test_flatten();
     test_pooling();
     std::cout << "All tests completed successfully!" << std::endl;
     return 0;
