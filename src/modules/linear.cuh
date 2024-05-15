@@ -31,21 +31,14 @@ class LinearLayer {
     }
     
     void init_uniform() {
-        // Do Kaiming uniform
         float max = 1.0f / std::sqrt(in_dim);
         op_uniform_init(w.t, -max, max);
         op_uniform_init(b.t, -max, max);
-        //std::cout << "init b=" << b.t.str() << std::endl;
     }
 
     //This function calculates the output of a lienar layer 
     //and stores the result in tensor "y"
     void forward(const Tensor<float> &x, Tensor<float> &y) {
-      //Lab-2: please add your code here
-      //Tensor<float> z;
-
-      //std::cout<<x.h<<" "<<x.w<<" "<<w.t.h<<" "<<w.t.w<<" "<<y.h<<" "<<y.w<<std::endl;
-
        Tensor<float> x_device = x.toDevice();
        Tensor<float> w_t_device =  w.t.toDevice();
        Tensor<float> b_t_device = b.t.toDevice();
