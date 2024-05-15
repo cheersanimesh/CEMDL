@@ -31,7 +31,6 @@ void test_matmul(int m, int n, int k, bool on_gpu)
 
 void test_elemwise(int m, int n, bool on_gpu)
 {
-    
     Tensor<float> X{m, n, on_gpu};
     op_const_init(X, 2.0);
 
@@ -93,33 +92,28 @@ void test_elemwise(int m, int n, bool on_gpu)
 }
 
 bool is_close_enough(float a, float b) {
-    if (std::abs(a - b) > 0.0001) {
-        return false;
-    } else {
-        return true;
-    }
+    return std::abs(a - b) <= 0.0001;
 }
+
 void assert_all_close_enough(Tensor<float> t, std::vector<float> v)
 {
     for (int i = 0; i < t.h; i++) {
         for (int j = 0; j < t.w; j++) {
-            //printf("%f <--> %f \n", Index(t, i, j), v[i*t.w+j]);
-            assert(is_close_enough(Index(t, i, j), v[i*t.w+j]));
+            assert(is_close_enough(Index(t, i, j), v[i * t.w + j]));
         }
     }
 }
 
-void
-test_op_cross_entropy_loss(bool on_gpu)
+void test_op_cross_entropy_loss(bool on_gpu)
 {
-    Tensor<float> logits_host{2,3};
+    Tensor<float> logits_host{2, 3};
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 3; j++) {
-            Index(logits_host, i, j) = i*3+j;
+            Index(logits_host, i, j) = i * 3 + j;
         }
     }
-    Tensor<char> targets{2,1};
-    for (int i = 0; i < 2; i++) {        
+    Tensor<char> targets{2, 1};
+    for (int i = 0; i < 2; i++) {
         Index(targets, i, 0) = i;
     }
     Tensor<float> logits = logits_host;
@@ -127,7 +121,7 @@ test_op_cross_entropy_loss(bool on_gpu)
         logits = logits.toDevice();
         targets = targets.toDevice();
     }
-    Tensor<float> d_logits{2,3, on_gpu};
+    Tensor<float> d_logits{2, 3, on_gpu};
     float loss = op_cross_entropy_loss(logits, targets, d_logits);
     assert(is_close_enough(loss, 1.9076));
 
@@ -158,13 +152,12 @@ test_op_cross_entropy_loss(bool on_gpu)
 
 }
 
-void 
-test_reduction(int m, int n, bool on_gpu)
+void test_reduction(int m, int n, bool on_gpu)
 {
     Tensor<int> X_host{m, n};
     op_const_init(X_host, 0);
 
-    int reduce_sum = m>n?n:m;
+    int reduce_sum = m > n ? n : m;
     for (int i = 0; i < X_host.h; i++) 
     {
         if (i >= X_host.w) {
@@ -179,21 +172,21 @@ test_reduction(int m, int n, bool on_gpu)
     } else {
         X = X_host;
     } 
-    Tensor<int> Y{1,n, on_gpu};
-    op_sum(X,Y);
+    Tensor<int> Y{1, n, on_gpu};
+    op_sum(X, Y);
 
-    Tensor<int> Yref{1,n};
-    op_const_init(Yref,0);
-    for (int j=0; j< reduce_sum; j++) {
+    Tensor<int> Yref{1, n};
+    op_const_init(Yref, 0);
+    for (int j = 0; j < reduce_sum; j++) {
         Index(Yref, 0, j) = 1;
     }
     Tensor<int> Y_host = Y.toHost();
     assert(op_allclose(Y, Yref));
 
-    Tensor<int> Y1{1,1, on_gpu};
+    Tensor<int> Y1{1, 1, on_gpu};
     op_sum(Y, Y1);
     Tensor<int> Y1_host = Y1.toHost();
-    assert(Index(Y1_host,0,0) == reduce_sum);
+    assert(Index(Y1_host, 0, 0) == reduce_sum);
 
     op_const_init(X, 1);
     op_sum(X, Y);
@@ -206,33 +199,32 @@ test_reduction(int m, int n, bool on_gpu)
     op_const_init(YYref, n);
     op_sum(YY, Y1);
     Y1_host = Y1.toHost();
-    assert(Index(Y1_host, 0, 0) == m*n);
+    assert(Index(Y1_host, 0, 0) == m * n);
 
     std::cout << "op_sum passed..." << std::endl;
 
     //try to create an A matrix whose last column has the biggest value
     Tensor<float> A{m, n, on_gpu};
     op_uniform_init<float>(A, 0.0, 1.0);
-    auto AA = A.slice(0, A.h, A.w-1, A.w);
+    auto AA = A.slice(0, A.h, A.w - 1, A.w);
     op_add<float>(AA, 10.0, AA);
 
     Tensor<int> ind{m, 1, on_gpu};
     op_argmax(A, ind);
     Tensor<int> indref{m, 1};
-    op_const_init(indref, n-1);
+    op_const_init(indref, n - 1);
     assert(op_allclose(ind, indref));
 }
 
-void 
-test_views()
+void test_views()
 {
     Tensor<float> A{5, 5};
     for (int i = 0; i < A.h; i++) {
         for (int j = 0; j < A.w; j++) {
-            Index(A, i, j) = i*A.w+j;
+            Index(A, i, j) = i * A.w + j;
         }
     }
-    auto B = A.slice(1,3,1,3);
+    auto B = A.slice(1, 3, 1, 3);
     assert(Index(B, 0, 0) == 6);
     assert(Index(B, 0, 1) == 7);
     assert(Index(B, 1, 0) == 11);
@@ -278,18 +270,13 @@ void test_flatten(int batch_size, int height, int width, bool on_gpu) {
     std::cout << "Flatten test passed..." << std::endl;
 }
 
-template <typename T>
-bool isClose(T a, T b, T reltol = ISCLOSE_RELTOL, T abstol = ISCLOSE_ABSTOL) {
-    return std::abs(a - b) <= std::max(reltol * std::max(std::abs(a), std::abs(b)), abstol);
-}
-
 void test_pooling() {
-    Tensor3D<float> input(1, 4, 4, false);
+    Tensor3D<float> input(4, 4, 1, false);
     int idx = 0;
     for (int i = 0; i < input.d; i++) {
         for (int j = 0; j < input.h; j++) {
             for (int k = 0; k < input.w; k++) {
-                input.rawp[idx++] = i * 16 + j * 4 + k;
+                input.values[i].rawp[idx++] = i * 16 + j * 4 + k;
             }
         }
     }
@@ -303,7 +290,7 @@ void test_pooling() {
     for (int i = 0; i < output.d; i++) {
         for (int j = 0; j < output.h; j++) {
             for (int k = 0; k < output.w; k++) {
-                if (!isClose(output.rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
+                if (!isClose(output.values[i].rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
                     maxPoolCorrect = false;
                     break;
                 }
@@ -318,12 +305,12 @@ void test_pooling() {
         for (int j = 0; j < grad_input.h; j++) {
             for (int k = 0; k < grad_input.w; k++) {
                 if ((j == 1 && k == 1) || (j == 1 && k == 2) || (j == 2 && k == 1) || (j == 2 && k == 2)) {
-                    if (!isClose(grad_input.rawp[idx++], 1.0f)) {
+                    if (!isClose(grad_input.values[i].rawp[idx++], 1.0f)) {
                         gradInputCorrect = false;
                         break;
                     }
                 } else {
-                    if (!isClose(grad_input.rawp[idx++], 0.0f)) {
+                    if (!isClose(grad_input.values[i].rawp[idx++], 0.0f)) {
                         gradInputCorrect = false;
                         break;
                     }
@@ -376,3 +363,4 @@ int main(int argc, char *argv[])
     std::cout << "All tests completed successfully!" << std::endl;
     return 0;
 }
+
