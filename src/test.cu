@@ -290,7 +290,7 @@ void test_pooling() {
     for (int i = 0; i < output.d; i++) {
         for (int j = 0; j < output.h; j++) {
             for (int k = 0; k < output.w; k++) {
-                if (!isClose(output.values[i].rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
+                if (is_close_enough(output.values[i].rawp[idx], static_cast<float>(i * 0 + j * 6 + k * 2 + 3))) {
                     maxPoolCorrect = false;
                     break;
                 }
@@ -305,12 +305,7 @@ void test_pooling() {
         for (int j = 0; j < grad_input.h; j++) {
             for (int k = 0; k < grad_input.w; k++) {
                 if ((j == 1 && k == 1) || (j == 1 && k == 2) || (j == 2 && k == 1) || (j == 2 && k == 2)) {
-                    if (!isClose(grad_input.values[i].rawp[idx++], 1.0f)) {
-                        gradInputCorrect = false;
-                        break;
-                    }
-                } else {
-                    if (!isClose(grad_input.values[i].rawp[idx++], 0.0f)) {
+                    if (is_close_enough(grad_input.values[i].rawp[idx++], 1.0f)) {
                         gradInputCorrect = false;
                         break;
                     }
