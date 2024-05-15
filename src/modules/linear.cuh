@@ -60,19 +60,14 @@ class LinearLayer {
     //This function compute the weight gradients (dw, db) and saves them in w.dt and b.dt respectively
     //It also computes the graidents of "x" and saves it in dx.
     void backward(const Tensor<float> &x, const Tensor<float> &dy, Tensor<float> &dx) {
-      //Lab-2: Please add your code here
-      
       Tensor<T> output_y{x.h, w.t.w, true};
       Tensor x_temp = x.toDevice(); 
-      //printf("p\n");
       forward(x, output_y);
       Tensor<T> derivRelu{ x.h, out_dim, true};
 
       op_relu_back(output_y, dy, derivRelu);
-      //printf("h\n");
       op_mm(x.transpose(),derivRelu, w.dt);
       op_sum(derivRelu, b.dt);
-      //printf("k\n");
       op_mm(derivRelu, w.t.transpose(), dx);
     }
 
