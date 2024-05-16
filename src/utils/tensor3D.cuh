@@ -38,6 +38,8 @@ public:
     std::shared_ptr<T> ref; // refcounted pointer, for garbage collection use only
     bool on_device;
 
+    std::vector<Tensor<T>> gradients;
+
     Tensor3D() : h(0), w(0), d(0), stride_h(0), stride_w(0), stride_d(0), offset(0), on_device(false) {}
 
     Tensor3D(int32_t h_, int32_t w_, int32_t d_, bool on_device_ = false)

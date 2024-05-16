@@ -8,11 +8,13 @@ private:
     std::vector<int> layer_dims;
     std::vector<Tensor<T>> activ;
     std::vector<Tensor<T>> d_activ;
+    std::stack<std::function<void()>> back_pass_ops;
 
     int batch_size;
     int in_dim;
 
 public:
+
     MLP(int batch_size_, int in_dim_, std::vector<int> layer_dims_, bool gpu)
         : batch_size(batch_size_), in_dim(in_dim_), layer_dims(layer_dims_)
     {
@@ -71,6 +73,8 @@ public:
                 layers[i].forward(intermediate_input, intermediate_activation);
                 if(i!=num_layers-1)
                     activ[i] = intermediate_activation;
+                else
+                    back_pass_ops.push([this, i]() { op_relu_back(activ[i], d_activ[i], d_activ[i]); });
 
                 intermediate_input= intermediate_activation;
                 out = intermediate_activation;
@@ -89,10 +93,16 @@ public:
 
        for(int i=n_layers-1;i>=0;i--)
        {
-            if(i!=0){
-                layers[i].backward(activ[i-1], d_activ[i], d_activ[i-1]);
-            }else{
-                layers[i].backward(in, d_activ[i], d_in);
+            if(i==n_layers-1){
+                layers[i].backward(activ[i - 1], d_out, d_activ[i - 1]);
+            } else{
+                back_pass_ops.top()();
+                back_pass_ops.pop();
+                if(i!=0){
+                    layers[i].backward(activ[i-1], d_activ[i], d_activ[i-1]);
+                }else{
+                    layers[i].backward(in, d_activ[i], d_in);
+                }
             }
        }
     }

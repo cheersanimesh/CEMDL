@@ -1,3 +1,4 @@
+#pragma once
 #include <getopt.h>
 
 #include "modules/mlp.cuh"
@@ -7,6 +8,7 @@
 #include "utils/dataset_mnist.hh"
 #include "ops/op_elemwise.cuh"
 #include "ops/op_cross_entropy.cuh"
+#include "utils/tensor3D.cuh"
 
 unsigned long long randgen_seed = 1;
 
@@ -147,5 +149,6 @@ int main(int argc, char *argv[])
         }
         break;
     }
+    unordered_map<string, Tensor3D<float>> tensor_map;
     train_and_test(num_epochs, batch_size, hidden_dim, n_layers);
 }
