@@ -1,167 +1,73 @@
 #pragma once
-
 #include "utils/tensor.cuh"
-#include "utils/tensor3D.cuh"
+#include "ops/op_gemm.cuh"
 
-//This operator compute C = A@B
 template <typename T>
-class MultiplyFunc
-{
-    public:
-        __host__ __device__ T operator()(T x, T a)
-        {
-            //Lab-1: add your code here (delete return 0)
-            return x * a;
+void op_conv(const Tensor<T>& input, const Tensor<T>& weight, const Tensor<T>& bias, Tensor<T>& output, int stride, int padding) {
+    int batch_size = input.h;
+    int input_channels = input.w;
+    int input_height = input.d1;
+    int input_width = input.d2;
+
+    int output_channels = weight.h;
+    int kernel_height = weight.d1;
+    int kernel_width = weight.d2;
+
+    int output_height = (input_height + 2 * padding - kernel_height) / stride + 1;
+    int output_width = (input_width + 2 * padding - kernel_width) / stride + 1;
+
+    Tensor<T> input_padded = input.pad(padding);
+
+    output = Tensor<T>{batch_size, output_channels, output_height, output_width, true};
+
+    for (int b = 0; b < batch_size; ++b) {
+        for (int oc = 0; oc < output_channels; ++oc) {
+            for (int oh = 0; oh < output_height; ++oh) {
+                for (int ow = 0; ow < output_width; ++ow) {
+                    Tensor<T> input_slice = input_padded.slice(b, b + 1, 0, input_channels, oh * stride, oh * stride + kernel_height, ow * stride, ow * stride + kernel_width);
+                    Tensor<T> weight_slice = weight.slice(oc, oc + 1, 0, input_channels, 0, kernel_height, 0, kernel_width);
+
+                    op_gemm(input_slice, weight_slice, output.slice(b, b + 1, oc, oc + 1, oh, oh + 1, ow, ow + 1));
+                }
+            }
+            op_add(output.slice(b, b + 1, oc, oc + 1, 0, output_height, 0, output_width), bias.slice(0, 1, oc, oc + 1, 0, 1, 0, 1), output.slice(b, b + 1, oc, oc + 1, 0, output_height, 0, output_width));
         }
-};
+    }
+}
 
-template <typename OpFunc, typename T>
-__global__ conv_kernel_naive(OpFunc f,const Tensor3D<T> input, Tensor3D<T> weights, Tensor<T> output, 
-                                int stride, int padding)
-{
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int32_t num_channels = input.d;
+template <typename T>
+void op_conv_back(const Tensor<T>& input, const Tensor<T>& output_grad, const Tensor<T>& weight, Tensor<T>& weight_grad, Tensor<T>& bias_grad, Tensor<T>& input_grad, int stride, int padding) {
+    int batch_size = input.h;
+    int input_channels = input.w;
+    int input_height = input.d1;
+    int input_width = input.d2;
 
-    if(!IndexOutofBound(output, row, col))
-    {
-        T val = 0.0;
-        int start_inp_c = stride * col; 
-        int start_inp_r = stride * row;
-        int end_inp_c = start_inp_c + stride.w;
-        int end_inp_r = start_inp_r + stride.h;  
-        if( end_inp_c < input.w && end_inp_r < input.h)
-        {
-            for(int i=start_inp_r;i<=end_inp_r;i++)
-            {
-                for(int j=start_inp_c;j<=end_inp_c;j++)
-                {
-                    for(int chan = 0;chan < num_channels ; chan++)
-                    {
-                        val += f(
-                            Index(input.values[chan], i, j),
-                            Index(weights.values[chan], i, j)
-                        );
-                    }
+    int output_channels = weight.h;
+    int kernel_height = weight.d1;
+    int kernel_width = weight.d2;
+
+    int output_height = output_grad.d1;
+    int output_width = output_grad.d2;
+
+    Tensor<T> input_padded = input.pad(padding);
+
+    weight_grad = Tensor<T>{output_channels, input_channels, kernel_height, kernel_width, true};
+    bias_grad = Tensor<T>{1, output_channels, 1, 1, true};
+    input_grad = Tensor<T>{batch_size, input_channels, input_height, input_width, true};
+
+    for (int b = 0; b < batch_size; ++b) {
+        for (int oc = 0; oc < output_channels; ++oc) {
+            op_sum(output_grad.slice(b, b + 1, oc, oc + 1, 0, output_height, 0, output_width), bias_grad.slice(0, 1, oc, oc + 1, 0, 1, 0, 1));
+
+            for (int oh = 0; oh < output_height; ++oh) {
+                for (int ow = 0; ow < output_width; ++ow) {
+                    Tensor<T> input_slice = input_padded.slice(b, b + 1, 0, input_channels, oh * stride, oh * stride + kernel_height, ow * stride, ow * stride + kernel_width);
+                    Tensor<T> output_grad_slice = output_grad.slice(b, b + 1, oc, oc + 1, oh, oh + 1, ow, ow + 1);
+
+                    op_gemm(output_grad_slice, input_slice.transpose(), weight_grad.slice(oc, oc + 1, 0, input_channels, 0, kernel_height, 0, kernel_width), true, false);
+                    op_gemm(output_grad_slice, weight.slice(oc, oc + 1, 0, input_channels, 0, kernel_height, 0, kernel_width), input_grad.slice(b, b + 1, 0, input_channels, oh * stride, oh * stride + kernel_height, ow * stride, ow * stride + kernel_width), false, true);
                 }
             }
         }
-
-        Index(output, row, col) = val;
     }
-
 }
-// template <typename OpFunc, typename T>
-// __global__ void conv_kernel(const Tensor3D<T> input, Tensor3D<T> weights, Tensor<T> output, 
-//                                 int stride, int padding)
-// {
-//         int out_x = blockIdx.x * blockDim.x + threadIdx.x;
-//         int out_y = blockIdx.y * blockDim.y + threadIdx.y;
-//         int channel = blockIdx.z * blockDim.z + threadIdx.z;
-
-//         int kernel_radius_x = kernel_width / 2;
-//         int kernel_radius_y = kernel_height / 2;
-//         int channels = input.d;
-        
-
-//         if (channel >= channels) return;
-
-//         float value = 0.0;
-
-//         int in_x_origin = (out_x * stride) - padding;
-//         int in_y_origin = (out_y * stride) - padding;
-
-//         // if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
-//         //     out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
-//         //     return;
-
-//         if(!IndexOutofBound(output, out_x, out_y)){
-
-//             for (int i = 0; i < kernel_width; i++) {
-//                 for (int j = 0; j < kernel_height; j++) {
-//                     int in_x = in_x_origin + i;
-//                     int in_y = in_y_origin + j;
-
-//                     if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
-//                         int input_index = (in_y * width + in_x) * channels + channel;
-//                         int kernel_index = (j * kernel_width + i) * channels + channel;
-//                         value += input[input_index] * kernel[kernel_index];
-//                     }
-//                 }
-//             }
-
-//             int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
-//             output[output_index] = value;
-//         }
-// }
-template <typename T>
-void op_conv(const Tensor3D<T>& input, const Tensor3D<T>& weights, Tensor<T>& output, int stride, int padding)
-{
-    int32_t val1 = (input.h - weights.h + 2 * padding+stride)/ stride;
-    int32_t val2 = (input.w - weights.w + 2 * padding+stride)/ stride;
-
-    assert(output.h == val1 && output.w == val2 && input.d == weights.d);
-    assert(input.on_device && weights.on_device && output.on_device);
-
-
-    //Lab-1: please complete this
-    //You need to define separate kernel function(s) and launch them here
-    //delete assert(0) when you are finished
-    int32_t N1 = A.h, M2 = B.w;
-    
-    dim3 threadsPerBlock(16,16);
-
-    MultiplyFunc<T> f;
-    dim3 numBlocks( 
-        (val2+ threadsPerBlock.x-1)/threadsPerBlock.x, 
-        (val1+threadsPerBlock.y-1)/threadsPerBlock.y,
-    );
-
-    MultiplyFunc f;
-
-    conv_kernel_naive<<numBlocks, threadsPerBlock>>>(input, weights, output, stride, padding);
-    //conv_kernel<<numBlocks , threadsPerBlock>>>(input, weights, output, stride, padding)
-    //mat_mul_kernel<<<numBlocks, threadsPerBlock>>>(f, A, B, C); 
-    //mat_mul_kernel<<<numBlocks, threadsPerBlock>>>(f, A, B, C); 
-    //assert(0);
-}
-
-
-// __global__ void conv2d_multichannel_kernel(float *input, float *output, float *kernel,
-//                                            int width, int height, int channels,
-//                                            int kernel_width, int kernel_height,
-//                                            int pad_x, int pad_y, int stride_x, int stride_y) {
-//     int out_x = blockIdx.x * blockDim.x + threadIdx.x;
-//     int out_y = blockIdx.y * blockDim.y + threadIdx.y;
-//     int channel = blockIdx.z * blockDim.z + threadIdx.z;
-
-//     int kernel_radius_x = kernel_width / 2;
-//     int kernel_radius_y = kernel_height / 2;
-
-//     if (channel >= channels) return;
-
-//     float value = 0.0;
-//     // Map the output position to the input position, considering stride and padding
-//     int in_x_origin = (out_x * stride_x) - pad_x;
-//     int in_y_origin = (out_y * stride_y) - pad_y;
-
-//     if (out_x >= (width + 2 * pad_x - kernel_width + stride_x) / stride_x ||
-//         out_y >= (height + 2 * pad_y - kernel_height + stride_y) / stride_y)
-//         return;
-
-//     for (int i = 0; i < kernel_width; i++) {
-//         for (int j = 0; j < kernel_height; j++) {
-//             int in_x = in_x_origin + i;
-//             int in_y = in_y_origin + j;
-
-//             if (in_x >= 0 && in_x < width && in_y >= 0 && in_y < height) {
-//                 int input_index = (in_y * width + in_x) * channels + channel;
-//                 int kernel_index = (j * kernel_width + i) * channels + channel;
-//                 value += input[input_index] * kernel[kernel_index];
-//             }
-//         }
-//     }
-
-//     int output_index = ((out_y * ((width + 2 * pad_x - kernel_width + stride_x) / stride_x) + out_x) * channels) + channel;
-//     output[output_index] = value;
-// }

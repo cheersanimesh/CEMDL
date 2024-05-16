@@ -1,5 +1,6 @@
 #include <getopt.h>
 #include <iostream>
+#include "layers/conv.cuh"
 #include "layers/flatten.cuh"
 #include "layers/pooling.cuh"
 #include "ops/op_mm.cuh"
@@ -326,10 +327,138 @@ void test_pooling() {
     std::cout << "max pooling backward test: " << (gradInputCorrect ? "passed..." : "failed!") << std::endl;
 }
 
+#define Index4D(t, b, c, h, w) ((t).rawp[(b) * (t).w * (t).stride_h + (c) * (t).stride_h + (h) * (t).stride_w + (w)])
+
+template <typename T>
+bool test_conv_layer() {
+    int batch_size = 2;
+    int in_channels = 3;
+    int in_height = 5;
+    int in_width = 5;
+    int out_channels = 2;
+    int kernel_size = 3;
+    int stride = 1;
+    int padding = 1;
+
+    Tensor<T> x{batch_size, in_channels * in_height * in_width, true};
+    op_uniform_init(x);
+
+    ConvLayer<T> conv(in_channels, out_channels, kernel_size, stride, padding, true);
+    conv.init_uniform();
+
+    Tensor<T> y, dx, dw, db;
+    conv.forward(x, y);
+
+    Tensor<T> dy{batch_size, out_channels * y.h * y.w, true};
+    op_uniform_init(dy);
+
+    conv.backward(x, dy, dx, dw, db);
+
+    bool forward_passed = true;
+    bool backward_passed = true;
+
+    // Compute expected values for forward pass
+    for (int b = 0; b < batch_size; ++b) {
+        for (int oc = 0; oc < out_channels; ++oc) {
+            for (int oh = 0; oh < y.h; ++oh) {
+                for (int ow = 0; ow < y.w; ++ow) {
+                    T expected_y = conv.b.t.rawp[oc];  // Use correct indexing for bias tensor
+                    for (int ic = 0; ic < in_channels; ++ic) {
+                        for (int kh = 0; kh < kernel_size; ++kh) {
+                            for (int kw = 0; kw < kernel_size; ++kw) {
+                                int ih = oh * stride - padding + kh;
+                                int iw = ow * stride - padding + kw;
+                                if (ih >= 0 && ih < in_height && iw >= 0 && iw < in_width) {
+                                    expected_y += Index4D(x, b, ic, ih, iw) * Index4D(conv.w.t, oc, ic, kh, kw);
+                                }
+                            }
+                        }
+                    }
+                    if (!is_close_enough(Index4D(y, b, oc, oh, ow), expected_y)) {
+                        forward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Compute expected values for backward pass (dx)
+    for (int b = 0; b < batch_size; ++b) {
+        for (int ic = 0; ic < in_channels; ++ic) {
+            for (int ih = 0; ih < in_height; ++ih) {
+                for (int iw = 0; iw < in_width; ++iw) {
+                    T expected_dx = 0;
+                    for (int oc = 0; oc < out_channels; ++oc) {
+                        for (int oh = 0; oh < y.h; ++oh) {
+                            for (int ow = 0; ow < y.w; ++ow) {
+                                int h_offset = ih + padding - oh * stride;
+                                int w_offset = iw + padding - ow * stride;
+                                if (h_offset >= 0 && h_offset < kernel_size && w_offset >= 0 && w_offset < kernel_size) {
+                                    expected_dx += Index4D(dy, b, oc, oh, ow) * Index4D(conv.w.t, oc, ic, h_offset, w_offset);
+                                }
+                            }
+                        }
+                    }
+                    if (!is_close_enough(Index4D(dx, b, ic, ih, iw), expected_dx)) {
+                        backward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Compute expected values for backward pass (dw)
+    for (int oc = 0; oc < out_channels; ++oc) {
+        for (int ic = 0; ic < in_channels; ++ic) {
+            for (int kh = 0; kh < kernel_size; ++kh) {
+                for (int kw = 0; ++kw < kernel_size; ++kw) {
+                    T expected_dw = 0;
+                    for (int b = 0; b < batch_size; ++b) {
+                        for (int oh = 0; oh < y.h; ++oh) {
+                            for (int ow = 0; ++ow < y.w; ++ow) {
+                                int ih = oh * stride - padding + kh;
+                                int iw = ow * stride - padding + kw;
+                                if (ih >= 0 && ih < in_height && iw >= 0 && iw < in_width) {
+                                    expected_dw += Index4D(dy, b, oc, oh, ow) * Index4D(x, b, ic, ih, iw);
+                                }
+                            }
+                        }
+                    }
+                    if (!is_close_enough(Index4D(dw, oc, ic, kh, kw), expected_dw)) {
+                        backward_passed = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    // Compute expected values for backward pass (db)
+    for (int oc = 0; oc < out_channels; ++oc) {
+        T expected_db = 0;
+        for (int b = 0; b < batch_size; ++b) {
+            for (int oh = 0; oh < y.h; ++oh) {
+                for (int ow = 0; ++ow < y.w; ++ow) {
+                    expected_db += Index4D(dy, b, oc, oh, ow);
+                }
+            }
+        }
+        if (!is_close_enough(db.rawp[oc], expected_db)) {  // Use correct indexing for db tensor
+            backward_passed = false;
+            break;
+        }
+    }
+
+    return forward_passed && backward_passed;
+}
+
+
 int main(int argc, char *argv[])
 {
     bool test_gpu = true;
-    int test_m = 335, test_n = 587, test_k= 699;
+    int test_m = 335, test_n = 587, test_k = 699;
 
     for (;;)
     {
@@ -363,7 +492,11 @@ int main(int argc, char *argv[])
     test_op_cross_entropy_loss(test_gpu);
     test_flatten();
     test_pooling();
+    if (test_conv_layer<float>()) {
+        std::cout << "test_conv_layer passed..." << std::endl;
+    } else {
+        std::cout << "test_conv_layer failed..." << std::endl;
+    }
     std::cout << "All tests completed successfully!" << std::endl;
     return 0;
 }
-
