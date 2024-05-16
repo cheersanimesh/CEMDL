@@ -6,6 +6,7 @@
 #include <string>
 
 #include "utils/assert.cuh"
+#include "utils/operator.cuh"
 
 #define ISCLOSE_RELTOL 1e-6 // this would not work for precision lower than float
 #define ISCLOSE_ABSTOL 1e-6
@@ -208,5 +209,25 @@ public:
       }
     }
     return max-min;
+  }
+
+  std::shared_ptr<Tensor<T>> grad;  
+  std::shared_ptr<Operator<T>> op;      
+  void backward() {
+    if (grad == nullptr) {
+        grad = std::make_shared<Tensor<T>>(h, w, on_device);
+        op_const_init(*grad, 1.0f);
+    }
+    if (op) {
+        op->backward();
+    }
+  }
+
+  void accumulate_grad(const Tensor<T> &source_grad) {
+    if (grad == nullptr) {
+        grad = std::make_shared<Tensor<T>>(h, w, on_device);
+        op_const_init(*grad, 0.0f);
+    }
+    op_add(*grad, source_grad, *grad);
   }
 };
