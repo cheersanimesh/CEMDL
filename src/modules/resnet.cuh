@@ -3,6 +3,7 @@
 #include "utils/conv.cuh"
 #include "utils/pooling.cuh"
 #include "utils/flatten.cuh"
+#include "ops/op_softmax.cuh" // Ensure this includes the softmax operation
 #include <vector>
 #include <string>
 #include <cmath>
@@ -111,6 +112,7 @@ public:
         Tensor<T> logits{out.h, fc_weights.w, out.on_device};
         op_mm(out, fc_weights, logits);
         op_add(logits, fc_bias, out);
+        op_softmax(out, out); // Apply softmax to convert logits to probabilities
     }
 
     void backward(const Tensor<T>& grad_output, const Tensor3D<T>& x, Tensor3D<T>& grad_input) {
