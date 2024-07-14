@@ -19,8 +19,6 @@ Challenges faced by Barenet:
 ## Motivation
 The motivation for this work is to enhance Barenet by introducing auto-differentiation to streamline and optimize these processes. Automating this process and extending Barenet to include sophisticated models like ResNet is crucial for modern machine learning applications.
 
-![Auto-differentiation Illustration](images/autodiff.png)
-
 ## Implementation Challenges
 - **Understand the Dataflow Graph**: Ensuring accurate analysis and optimization of model performance.
 - **Apply Reverse-Mode Auto-Differentiation Correctly**: Implementing backpropagation accurately and efficiently.
